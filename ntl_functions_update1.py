@@ -1,20 +1,3 @@
-"""
-ntl_functions.py
-
-Shared utilities for the VIIRS nighttime-lights / EagleI outage pipeline.
-
-Design notes
-------------
-* Baseline statistics are computed exactly once (`compute_pixel_stats`) and every
-  downstream deviation metric reads from those columns. There is no second,
-  independently-computed baseline anywhere in this module.
-* Raw radiance is never overwritten in place. Date columns hold radiance through
-  the wide stage; all derived metrics are added as new columns after melting to
-  long format, so multiple metrics can coexist.
-* Outage ground truth is joined from a pre-aggregated county-daily table keyed on
-  (fips_code, Date), which removes the cross-state county-name collisions that
-  name-only matching produced.
-"""
 
 from __future__ import annotations
 
@@ -31,10 +14,7 @@ import numpy as np
 import pandas as pd
 from shapely.geometry import Point, box
 
-
-# =============================================================================
 # --- Module Constants ---
-# =============================================================================
 
 _HDF = "HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields"
 
@@ -74,10 +54,7 @@ DEVIATION_MEDIAN_COLS = [
 
 DEVIATION_COLS = DEVIATION_MEAN_COLS + DEVIATION_MEDIAN_COLS
 
-
-# =============================================================================
 # --- Low-Level Helpers ---
-# =============================================================================
 
 def _date_cols(df):
     """Return columns whose names are ISO dates, ignoring known metadata fields."""
@@ -120,10 +97,7 @@ def save(df, path):
     print(f"    Saved -> {path}  ({len(df):,} rows)")
     return df
 
-
-# =============================================================================
 # --- VIIRS Radiance Extraction ---
-# =============================================================================
 
 def extract_mosaic_radiance(data_dir, bbox, end_date, start_date=None, round_deg=6):
     """
@@ -215,10 +189,7 @@ def extract_mosaic_radiance(data_dir, bbox, end_date, start_date=None, round_deg
     print(f"    Extracted {len(wide):,} pixels across {len(wide.columns) - 2} dates")
     return wide
 
-
-# =============================================================================
 # --- County Geometry ---
-# =============================================================================
 
 def get_county_record(shp_path, county_name, state_fips):
     counties = gpd.read_file(shp_path)
@@ -262,10 +233,7 @@ def clip_to_county(df, shp_path, county_name, state_fips,
     print(f"    Pixels inside county boundary : {len(joined):,} / {len(df):,}")
     return pd.DataFrame(joined)
 
-
-# =============================================================================
 # --- Buildings & Customer Allocation ---
-# =============================================================================
 
 def add_building_count(df, buildings_path, pixel_half=0.0025):
     bldg = gpd.read_file(buildings_path).to_crs("EPSG:4326")
@@ -290,10 +258,7 @@ def add_customers(df, total_customers):
     out["customers_per_pixel"] = (df["building_count"] / total_buildings) * total_customers
     return out
 
-
-# =============================================================================
 # --- Baseline Pixel Statistics ---
-# =============================================================================
 
 def compute_pixel_stats(df, baseline_start, baseline_end, min_customers=1):
     """
@@ -343,10 +308,7 @@ def compute_pixel_stats(df, baseline_start, baseline_end, min_customers=1):
           f"over {len(pre_cols)} candidate dates")
     return out
 
-
-# =============================================================================
 # --- Date Coverage Filter ---
-# =============================================================================
 
 def filter_dates_by_coverage(df, min_coverage=0.90):
     """Drop dates whose valid pixels represent less than min_coverage of customers."""
@@ -372,10 +334,7 @@ def truncate_dates(df, end_date, start_date=None):
     non_date = [c for c in df.columns if c not in date_cols]
     return df[non_date + keep]
 
-
-# =============================================================================
 # --- Long Format Conversion ---
-# =============================================================================
 
 def to_long_radiance(df_wide, value_name="ntl"):
     """Melt the wide radiance table to long format, preserving raw radiance."""
@@ -389,10 +348,7 @@ def to_long_radiance(df_wide, value_name="ntl"):
     print(f"    Long format rows       : {len(long_df):,}")
     return long_df
 
-
-# =============================================================================
 # --- Deviation Metrics ---
-# =============================================================================
 
 def add_deviation_metrics(df_long, value_col="ntl", log_clip=None, drop_clipped=True):
     """
@@ -451,10 +407,7 @@ def add_deviation_metrics(df_long, value_col="ntl", log_clip=None, drop_clipped=
     print(f"    Deviation metrics added ; valid LCS rows : {valid:,} / {len(out):,}")
     return out
 
-
-# =============================================================================
 # --- EagleI Outage Ground Truth ---
-# =============================================================================
 
 def load_daily_outage(csv_path, state=None, value_col=TARGET_COL,
                       percent_fallback_scale=100.0, max_plausible=1.05):
