@@ -1,0 +1,19 @@
+# Data and outputs (large, personal paths, not meant for version control)
+data/
+outputs/
+logs/
+*.h5
+*.csv
+*.geojson
+*.shp
+*.shx
+*.dbf
+*.prj
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Env / secrets
+.env
