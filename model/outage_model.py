@@ -58,25 +58,24 @@ TARGET_CANDIDATES = ("percent_outage", "fraction_outage")
 GROUP_COL = "county_date"
 
 N_FOLDS = 5
-N_MEMBERS = 10                      # ensemble members per fold
+N_MEMBERS = 10                      
 SEED = 0
 
 HIDDEN_DIM = 8
 N_EPOCHS = 300
 MIN_EPOCHS = 50
 LR = 0.05
-WEIGHT_DECAY = 1e-3                 # applied to the MLP only, not to a and b
-PATIENCE = 20                       # early-stopping patience, epochs
-SCHED_PATIENCE = 8                  # learning-rate schedule patience, epochs
-ES_FRACTION = 0.15                  # share of training bags held out for early stopping
-MIN_PRED_SD = 0.05                  # below this a fit is treated as degenerate
+WEIGHT_DECAY = 1e-3                 
+PATIENCE = 20                       
+SCHED_PATIENCE = 8                 
+ES_FRACTION = 0.15                 
+MIN_PRED_SD = 0.05                  
 MAX_REFITS = 3
 
 
 # --- model ---
 
 class OutageModel(nn.Module):
-    """Pixel deviation score, shared logistic response, customer-share pooling."""
 
     def __init__(self, n_features, hidden_dim=HIDDEN_DIM):
         super().__init__()
@@ -89,19 +88,14 @@ class OutageModel(nn.Module):
         self.b = nn.Parameter(torch.tensor(0.0))
 
     def pixel_scores(self, X):
-        """Return the deviation scores d_j and outage probabilities p_j."""
         d = self.deviation(X).squeeze(-1)
         return d, torch.sigmoid(self.a * d + self.b)
 
     def forward(self, data):
-        # The weights sum to one within each bag and p_j lies in (0, 1), so the
-        # pooled prediction is a convex combination and needs no clipping.
         _, p = self.pixel_scores(data.X)
         return torch.zeros(data.n_bags).index_add_(0, data.bag_idx, data.weights * p)
 
     def curve(self):
-        """Return (a, b, d50), where d50 = -b / a is the deviation score at
-        which the modelled outage probability equals 0.5."""
         a, b = float(self.a), float(self.b)
         return a, b, (-b / a if abs(a) > 1e-6 else float("nan"))
 
@@ -109,12 +103,6 @@ class OutageModel(nn.Module):
 # --- data preparation ---
 
 def load_data(path):
-    """Read the pixel table and construct bag identifiers.
-
-    No records are excluded and no values are altered: every pixel in the input
-    file enters the model as supplied. `check_data` verifies that the file meets
-    the assumptions the estimator relies on and raises if it does not.
-    """
     df = pd.read_csv(path, low_memory=False)
 
     target_col = next((c for c in TARGET_CANDIDATES if c in df.columns), None)
@@ -133,12 +121,6 @@ def load_data(path):
 
 
 def check_data(df):
-    """Verify the input, raising on any violation. Nothing is modified.
-
-    The estimator assumes finite predictors, an outage fraction in [0, 1] that
-    is constant within a bag, and a positive customer total per bag. These are
-    properties of the input file, not choices made here.
-    """
     numeric = FEATURE_COLS + [CUSTOMER_COL, "target"]
     for column in numeric:
         values = pd.to_numeric(df[column], errors="coerce").to_numpy(np.float64)
@@ -157,14 +139,6 @@ def check_data(df):
 
 
 class BagDataset:
-    """Tensor view of one partition.
-
-    Standardisation is a reparameterisation of the predictors, not a change to
-    the data: the statistics are supplied by the caller and must be derived from
-    training bags only. Customer shares are precomputed because they are fixed
-    by the data and do not depend on the model parameters.
-    """
-
     def __init__(self, df, means, sds):
         df = df.sort_values(GROUP_COL, kind="mergesort").reset_index(drop=True)
         self.df = df  # sorted, row-aligned with X/weights — lets pixel-level
@@ -187,12 +161,10 @@ class BagDataset:
 
 
 def standardisation_stats(df):
-    """Feature means and standard deviations; zero-variance features stay unscaled."""
     return df[FEATURE_COLS].mean(), df[FEATURE_COLS].std().replace(0, 1.0)
 
 
 def assign_folds(df, n_folds, seed):
-    """Partition bags, not pixel records, into folds."""
     bags = np.sort(df[GROUP_COL].unique())
     splitter = KFold(n_splits=n_folds, shuffle=True, random_state=seed)
     fold_of_bag = {bag: fold
@@ -204,11 +176,6 @@ def assign_folds(df, n_folds, seed):
 # --- estimation ---
 
 def fit_single(data, seed):
-    """Fit one model by full-batch Adam with early stopping.
-
-    The early-stopping subset is drawn from the bags supplied in `data`, which
-    during cross-validation contains training bags only.
-    """
     torch.manual_seed(seed)
     rng = np.random.RandomState(seed)
 
@@ -258,13 +225,6 @@ def fit_single(data, seed):
 
 
 def fit_ensemble(data, n_members, label):
-    """Fit `n_members` independently initialised models on `data`.
-
-    A fit is repeated with a shifted initialisation if its training predictions
-    are degenerate (standard deviation below MIN_PRED_SD). The criterion uses
-    training predictions only and never inspects held-out bags; the number of
-    repetitions is returned so that it can be reported.
-    """
     members, diagnostics, n_refits = [], [], 0
 
     for member in range(n_members):
@@ -291,13 +251,6 @@ def predict_ensemble(members, data):
 
 
 def predict_pixel_ensemble(members, data):
-    """Per-pixel deviation score and outage probability, averaged over the ensemble.
-
-    These were never fitted against a pixel-level label — supervision is bag
-    level only (see module docstring) — so treat them as a byproduct of the
-    model's internal structure, useful for mapping within a bag, not as a
-    separately validated prediction.
-    """
     with torch.no_grad():
         scores = [m.pixel_scores(data.X) for m in members]
         d = np.column_stack([s[0].numpy() for s in scores]).mean(axis=1)
@@ -321,7 +274,6 @@ def evaluate(observed, predicted):
 # --- reporting ---
 
 def response_curve_figure(members, data, path):
-    """Plot the median fitted response curve over the deviation-score distribution."""
     with torch.no_grad():
         d = np.column_stack([m.pixel_scores(data.X)[0].numpy() for m in members]).mean(axis=1)
 
@@ -358,7 +310,6 @@ def response_curve_figure(members, data, path):
 
 
 def cross_validate(df, out_dir):
-    """Run bag-level k-fold cross-validation and write the per-fold tables."""
     folds = assign_folds(df, N_FOLDS, SEED)
     fold_results, observed, predicted, bag_ids = [], [], [], []
 
@@ -412,13 +363,6 @@ def cross_validate(df, out_dir):
 
 
 def save_final_model(members, means, sds, out_dir):
-    """Save the fitted ensemble and the standardisation it was trained with.
-
-    The standardisation stats travel with the model because they are part of
-    it: a saved network expects features scaled the same way it was trained
-    on, and those statistics must come from training data, never recomputed
-    from whatever is being scored later.
-    """
     model_dir = out_dir / "final_model"
     model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -439,11 +383,6 @@ def save_final_model(members, means, sds, out_dir):
 
 
 def load_final_model(model_dir):
-    """Load a saved ensemble plus the standardisation stats it was trained with.
-
-    Returns (members, means, sds) where means/sds are pandas Series indexed by
-    FEATURE_COLS, ready to pass straight into BagDataset for new data.
-    """
     model_dir = Path(model_dir)
     with open(model_dir / "standardisation.json") as handle:
         stats = json.load(handle)
@@ -468,7 +407,6 @@ def load_final_model(model_dir):
 
 
 def fit_final_model(df, out_dir):
-    """Refit on the complete dataset and save the ensemble for later scoring."""
     means, sds = standardisation_stats(df)
     data = BagDataset(df, means, sds)
     print(f"\nfinal model: {data.n_bags:,} bags")
@@ -509,10 +447,6 @@ def parse_args():
                         help="skip cross-validation and only fit + save the final ensemble "
                              "(use this once you already have CV results and just want the "
                              "trained model to score on unseen data)")
-    # parse_known_args, not parse_args: inside Jupyter, sys.argv carries the
-    # kernel's own "-f <connection file>.json" flag, which argparse would
-    # otherwise reject as unrecognized. From a terminal this behaves the same
-    # as parse_args unless you genuinely pass an unknown flag.
     args, _ = parser.parse_known_args()
     return args
 
