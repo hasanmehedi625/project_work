@@ -1,38 +1,33 @@
 """
-Bag-level outage model: an MLP deviation score with a shared logistic response.
+Bag-level outage model.
 
 Model
 -----
-For pixel j with feature vector x_j and customer count c_j:
+1. MLP calculates a deviation score for each pixel.
+2. A shared logistic function converts the score to outage probability.
+3. Pixel probabilities are weighted by customer share.
+4. Weighted probabilities are averaged to predict the county-date
+   outage fraction.
 
-    d_j     = f_phi(x_j)                     deviation score (MLP)
-    p_j     = sigmoid(a * d_j + b)           shared logistic response
-    w_ij    = c_j / sum_{k in bag i} c_k     customer share within a bag
-    y_hat_i = sum_{j in bag i} w_ij * p_j    bag-level prediction
-
-The network parameters phi and the response parameters a and b are estimated
-jointly by minimising the mean squared error between y_hat_i and the observed
-outage fraction y_i at the county-date (bag) level. Pixel-level outage labels
-are never observed; supervision is bag-level only.
+The model is trained using county-date outage fractions.
+No pixel-level outage labels are used.
 
 Evaluation
 ----------
-Five-fold cross-validation with folds assigned at the bag level, so pixels from
-the same bag never appear in both the training and validation partitions.
-Within each fold, feature standardisation statistics and the early-stopping
-split are derived from training bags only, so each bag is scored exactly once
-by a model estimated without access to it.
+5-fold cross-validation is performed at the county-date (bag) level.
+A county-date appears in either training or validation, never both.
 
-Each fold fits an ensemble of independently initialised networks and averages
-their bag-level predictions; the across-initialisation spread is reported
-alongside the ensemble score. A final ensemble is refitted on the complete
-dataset to obtain the reported response-curve parameters. Its in-sample fit is
-reported for completeness and is not a generalisation estimate.
+Each fold uses an ensemble of independently initialized networks.
+The final model is an ensemble trained on all available data.
+
+The final model's training score is reported for reference only;
+it is not a measure of generalization.
 
 Usage
 -----
-    python outage_model.py --data data/15events_post_event_dates.csv \
-                           --out results/baseline_cv
+python outage_model.py --data data/train.csv --out results/baseline_cv
+
+Use --final-only to skip cross-validation and train only the final model.
 """
 
 import argparse
