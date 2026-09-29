@@ -38,12 +38,6 @@ from outage_model import (
 
 
 def load_unseen(path):
-    """Read a test CSV and build bag identifiers, the same way training data is built.
-
-    Unlike `outage_model.load_data`, a known-outage column is optional: this
-    file may be genuinely unlabeled, or may carry ground truth kept aside for
-    evaluation. Either way, nothing here is filtered or altered.
-    """
     df = pd.read_csv(path, low_memory=False)
 
     date_col = "Date" if "Date" in df.columns else "date"
@@ -63,7 +57,6 @@ def load_unseen(path):
 
 
 def check_unseen(df, has_target):
-    """Verify the file meets the model's assumptions; raise rather than silently coerce."""
     numeric = FEATURE_COLS + [CUSTOMER_COL] + (["target"] if has_target else [])
     for column in numeric:
         values = pd.to_numeric(df[column], errors="coerce").to_numpy(np.float64)
@@ -89,8 +82,7 @@ def main():
                         help="unseen test CSV, same columns as training data")
     parser.add_argument("--out", type=Path, required=True,
                         help="directory for predictions.csv (and scores.json if labeled)")
-    args, _ = parser.parse_known_args()  # tolerate being run from a notebook kernel
-
+    args, _ = parser.parse_known_args()  
     args.out.mkdir(parents=True, exist_ok=True)
 
     members, means, sds = load_final_model(args.model_dir)
@@ -98,7 +90,7 @@ def main():
 
     df, has_target = load_unseen(args.data)
     if not has_target:
-        df["target"] = 0.0  # placeholder; BagDataset needs the column, never used for scoring
+        df["target"] = 0.0  
     data = BagDataset(df, means, sds)
 
     prediction = predict_ensemble(members, data)
@@ -116,14 +108,10 @@ def main():
     out.to_csv(args.out / "predictions.csv", index=False)
     print(f"wrote {args.out / 'predictions.csv'}")
 
-    # Pixel-level output. These probabilities were never fitted against a
-    # pixel-level label (see outage_model.predict_pixel_ensemble) — treat
-    # them as useful for within-bag mapping, not as a separately validated
-    # prediction.
     d_pixel, p_pixel = predict_pixel_ensemble(members, data)
     pixel_out = data.df.copy()
     if not has_target:
-        pixel_out = pixel_out.drop(columns=["target"])  # the placeholder added above
+        pixel_out = pixel_out.drop(columns=["target"])  
     pixel_out["deviation_score"] = d_pixel
     pixel_out["predicted_prob"] = p_pixel
     pixel_out["customer_weight_in_bag"] = data.weights.numpy()
