@@ -18,7 +18,7 @@ two outputs to --out:
 
 Usage
 -----
-    python evaluate_on_test.py \
+    python evaluate.py \
         --model-dir results/baseline_cv/final_model \
         --data new_event_data.csv \
         --out results/test_scores
