@@ -1,27 +1,28 @@
 """
-Score a saved outage-model ensemble on a new CSV of unseen bags.
+Evaluate a saved outage model on new, unseen bags.
 
-This does not retrain anything. It loads the ensemble and the standardisation
-statistics written by `outage_model.py`'s final-model step, applies that same
-standardisation to the new file (never recomputed from it — the test data
-must be scaled using the statistics the model was trained with), and writes
-two outputs to --out:
+This script does not retrain the model.
 
-  predictions.csv        one row per bag (county-date); predicted outage
-                          fraction, and observed + metrics if the file
-                          carries a known outage column.
-  predictions_pixel.csv  one row per pixel; deviation score and outage
-                          probability from pixel_scores(). These are never
-                          fitted against a pixel-level label — supervision is
-                          bag level only — so treat them as useful for
-                          mapping within a bag, not as separately validated.
+It loads the saved model and the training standardisation statistics,
+then applies the same standardisation to the new data.
+
+Outputs
+-------
+predictions.csv
+    One row per county-date bag with the predicted outage fraction.
+    If observed outage data are available, metrics are also included.
+
+predictions_pixel.csv
+    One row per pixel with its deviation score and outage probability.
+    These pixel-level results are not directly validated because the
+    model was trained using bag-level outage labels.
 
 Usage
 -----
-    python evaluate.py \
-        --model-dir results/baseline_cv/final_model \
-        --data new_event_data.csv \
-        --out results/test_scores
+python evaluate.py \
+    --model-dir results/baseline_cv/final_model \
+    --data new_event_data.csv \
+    --out results/test_scores
 """
 
 import argparse
