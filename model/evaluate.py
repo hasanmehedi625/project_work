@@ -1,30 +1,3 @@
-"""
-Evaluate a saved outage model on new, unseen bags.
-
-This script does not retrain the model.
-
-It loads the saved model and the training standardisation statistics,
-then applies the same standardisation to the new data.
-
-Outputs
--------
-predictions.csv
-    One row per county-date bag with the predicted outage fraction.
-    If observed outage data are available, metrics are also included.
-
-predictions_pixel.csv
-    One row per pixel with its deviation score and outage probability.
-    These pixel-level results are not directly validated because the
-    model was trained using bag-level outage labels.
-
-Usage
------
-python evaluate.py \
-    --model-dir results/baseline_cv/final_model \
-    --data new_event_data.csv \
-    --out results/test_scores
-"""
-
 import argparse
 from pathlib import Path
 
